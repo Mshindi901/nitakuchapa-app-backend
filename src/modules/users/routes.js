@@ -15,7 +15,7 @@ import {authenticate, authorize} from '../../middleware/auth.js';
 const router = express.Router();
 
 router.post('/auth/signup', sign_up);
-router.post('/admin/auth/signup', admin_sign_up);
+router.post('/admin/auth/signup', authenticate, authorize('admin'), admin_sign_up);
 router.post('/auth/signin', sign_in);
 router.get('/users', authenticate, authorize('admin'), get_all_users);
 router.get('/users/email', authenticate, authorize('user', 'admin'), get_user_by_email);
