@@ -46,7 +46,7 @@ export const owner_add_scores = async(req, res) => {
         if(!user_id){
             return res.status(400).json({success: false, message: 'Please Login and Try again'});
         };
-        const{participant_a_scores, participant_b_scores} = req.body;
+        let {participant_a_scores, participant_b_scores} = req.body;
         if(!participant_a_scores || !participant_b_scores){
             return res.status(400).json({success: false, message: 'Provide the scores'})
         };
