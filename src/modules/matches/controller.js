@@ -134,7 +134,7 @@ export const update_scores = async(req, res) => {
         if(!id){
             return res.status(400).json({success: false, message: 'Provide Match ID'});
         };
-        const {team_a_scores, team_b_scores} = req.body;
+        let {team_a_scores, team_b_scores} = req.body;
         const match = await League_Matches.findByPk(id);
         if(!match){
             return res.status(404).json({success: false, message: 'Invalid Match ID'});
