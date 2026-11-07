@@ -1,41 +1,47 @@
-export default function Match_generation(participant, league, interval){
-    if(participant.length < 2){
-        return 'Atleast two participants needed'
-    };
-    const players = [...participant];
-    if(players.length % 2 !== 0){
-        players.push(null);
-    };
-    const total_rounds = players.length - 1;
-    const matches_per_round = players.length /2;
-    const rounds = [];
-    for (let r = 0; r < total_rounds; r++){
-        const matches = []
-        for(let i = 0; i < matches_per_round; i++){
-            const team_a = players[i];
-            const team_b = players[players.length - 1 -i];
-            if(team_a && team_b){
-                matches.push({team_a: team_a.id, team_b: team_b.id});
-            };
-        };
-        rounds.push(matches);
-        const last_team = players.pop();
-        players.splice(1, 0, last_team);
-    };
+export default function Match_generation(participants, league, interval) {
+    if (!Array.isArray(participants) || participants.length < 2) {
+        return [];
+    }
 
-    let match_index = 0;
-    return rounds.flatMap((fixtures, round_index) => {
-        return fixtures.map(fixture => {
-            const startTime = new Date(league.start_date).getTime;
-            const scheduled_at = new Date(startTime + (match_index * interval));
-            match_index ++
-            return {
-                ...fixture,
-                league_id: league.id,
-                round: round_index + 1,
-                scheduled_at: scheduled_at,
-                status: 'pending'
+    const intervalMilliseconds = Number(interval);
+    const startTime = new Date(league.start_date).getTime();
+    if (!Number.isFinite(intervalMilliseconds) || intervalMilliseconds <= 0 || !Number.isFinite(startTime)) {
+        throw new Error('A valid start date and match interval are required');
+    }
+
+    const players = [...participants];
+    if (players.length % 2 !== 0) {
+        players.push(null);
+    }
+
+    const totalRounds = players.length - 1;
+    const matchesPerRound = players.length / 2;
+    const rounds = [];
+
+    for (let round = 0; round < totalRounds; round += 1) {
+        const fixtures = [];
+        for (let index = 0; index < matchesPerRound; index += 1) {
+            const participantA = players[index];
+            const participantB = players[players.length - 1 - index];
+            if (participantA && participantB) {
+                fixtures.push({
+                    participant_a: participantA.id,
+                    participant_b: participantB.id,
+                });
             }
-        })
-    })
-};
+        }
+        rounds.push(fixtures);
+        players.splice(1, 0, players.pop());
+    }
+
+    return rounds.flatMap((fixtures, roundIndex) => {
+        const scheduleAt = new Date(startTime + roundIndex * intervalMilliseconds);
+        return fixtures.map((fixture) => ({
+            ...fixture,
+            league_id: league.id,
+            round: roundIndex + 1,
+            schedule_at: scheduleAt,
+            status: 'pending',
+        }));
+    });
+}

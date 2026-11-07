@@ -8,6 +8,6 @@ export const connectDB = async () => {
         console.log('Models synchronized successfully');
     } catch (error) {
         console.error(`Error connecting to the database ${error}`);
-        return null;
+        throw error;
     }
 };

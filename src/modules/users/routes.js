@@ -21,7 +21,7 @@ router.get('/users', authenticate, authorize('admin'), get_all_users);
 router.get('/users/email', authenticate, authorize('user', 'admin'), get_user_by_email);
 router.get('/user/:id', authenticate, get_user_by_id);
 router.get('/user/name', authenticate, authorize('user', 'admin'), get_user_by_name);
-router.put('/user/:id', authenticate, authorize('user'), update_user_by_id);
-router.delete('/user/:id', delete_user);
+router.put('/user/:id', authenticate, authorize('user', 'admin'), update_user_by_id);
+router.delete('/user/:id', authenticate, authorize('user', 'admin'), delete_user);
 
 export default router;

@@ -1,168 +1,202 @@
+import {randomBytes} from 'node:crypto';
+import sequelize from '../../database/config.js';
 import League from "./schema.js";
 import League_Participant from "../participants/schema.js";
-import {timeToMilliSeconds} from  '../../utils/time-converter.js';
-import {randomBytes} from 'crypto';
+import League_Matches from "../matches/schema.js";
+import League_Point from "../points_table/schema.js";
+import {timeToMilliSeconds} from '../../utils/time-converter.js';
 
-export const add_league = async(req, res) => {
+function getQueryValue(value) {
+    return typeof value === 'string' ? value : value?.type ?? value?.status;
+}
+
+function getParticipantCount(body) {
+    return Number(body.participants ?? body.participant);
+}
+
+export const add_league = async (req, res) => {
     try {
-        //interval number is the number part of the converter function
-        //Heavenly God hope this shit works
-        const {name, type, participant, interval_number, interval_unit, start_date, end_date, no_of_days} = req.body;
-        if(!name || !type || !participant || !interval_number || !interval_unit || !start_date){
-            return res.status(400).json({success: false, message: 'Missing Fields'});
-        };
-        const {team_name, player_name} = req.body;
-        if(!team_name || !player_name){
-            return res.status(400).json({success: false, message: 'Attach Team name for partcipation registration'});
-        };
-        const user_id = req.user.id;
-        if(!user_id){
-            return res.status(400).json({success: false, message: 'Please Login and be authentiated'});
-        };
-        const share_code = randomBytes(16).toString('hex');
-        const match_interval = timeToMilliSeconds(interval_number, interval_unit);
-        const league = await League.create({name, owner: user_id, share_code, type, participant, match_interval, start_date, end_date, no_of_days});
-        if(!league){
-            return res.status(500).json({success: false, message: 'Failed to create League'});
-        };
-        const participant_one = await League_Participant.create({league_id: league.id, user_id: user_id, player_name: player_name, team_name});
-        if(!participant_one){
-            return res.status(500).json({success: false, message: 'League created, failed to add participant'});
-        };
-        return res.status(201).json({success: true, message: 'League added and added to Participants'});
+        const {name, type, interval_number, interval_unit, start_date, no_of_days} = req.body;
+        const participantCount = getParticipantCount(req.body);
+        const playerName = req.body.player_name?.trim();
+        const teamName = req.body.team_name?.trim();
+        if (!name?.trim() || !['league', 'tournament'].includes(type) ||
+            !Number.isInteger(participantCount) || participantCount < 2 ||
+            !interval_number || !interval_unit || !start_date || !playerName || !teamName) {
+            return res.status(400).json({success: false, message: 'Provide a name, type, at least two participants, a match interval, start date, player name, and team name'});
+        }
+        const matchInterval = timeToMilliSeconds(interval_number, interval_unit);
+        const result = await sequelize.transaction(async (transaction) => {
+            const league = await League.create({
+                name: name.trim(),
+                owner: req.user.id,
+                share_code: randomBytes(16).toString('hex'),
+                type,
+                participants: participantCount,
+                match_interval: matchInterval,
+                start_date,
+                end_date: req.body.end_date || start_date,
+                no_of_days: no_of_days ? Number(no_of_days) : null,
+            }, {transaction});
+            const participant = await League_Participant.create({
+                league_id: league.id,
+                user_id: req.user.id,
+                player_name: playerName,
+                team_name: teamName,
+            }, {transaction});
+            await League_Point.create({
+                competition_id: league.id,
+                participant_id: participant.id,
+            }, {transaction});
+            return league;
+        });
+        return res.status(201).json({success: true, message: 'Competition created', data: result});
     } catch (error) {
-        console.error(`Error with adding a new league record ${error}`);
+        console.error(`Error with adding a new competition record ${error}`);
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            return res.status(409).json({success: false, message: 'A competition with that name already exists'});
+        }
+        if (error.message?.includes('interval')) {
+            return res.status(400).json({success: false, message: error.message});
+        }
         return res.status(500).json({success: false, message: 'Internal Server Error'});
     }
 };
 
-export const get_owner_competitions = async(req, res) => {
+export const get_owner_competitions = async (req, res) => {
     try {
-        const user_id = req.user.id;
-        if(!user_id){
-            return res.status(400).json({success: false, message: 'Please Login and Try again'})
-        };
-        const leagues = await League.findAll({where:{owner: user_id}});
-        if(!leagues || leagues.length === 0){
-            return res.status(404).json({success: false, message: 'No Leagues Found'});
-        };
-        return res.status(200).json({success: true, message: 'Leagues found', data: leagues})
+        const competitions = await League.findAll({where: {owner: req.user.id}});
+        return res.status(200).json({success: true, message: 'Competitions fetched', data: competitions});
     } catch (error) {
-        console.error(`Error with getting user leagues ${error}`);
+        console.error(`Error with getting user competitions ${error}`);
         return res.status(500).json({success: false, message: 'Internal Server Error'});
     }
 };
 
-export const get_owner_competitions_by_type = async(req, res) => {
+export const get_owner_competitions_by_type = async (req, res) => {
     try {
-        const user_id = req.user.id;
-        if(!user_id){
-            return res.status(400).json({success: false, message: 'PLease login and Try again'});
-        };
-        const{type} = req.query.q;
-        if(!type){
-            return res.status(400).json({success: false, message: 'Provide The type query'});
-        };
-        const competitions = await League.findAll({type: type, owner: user_id});
-        if(!competitions || competitions.length === 0){
-            return res.status(404).json({success: false, message: 'Missing competitions'});
-        };
-        return res.status(200).json({success: false, message: 'Competitions Fetched', data: competitions});
+        const type = getQueryValue(req.query.q) ?? req.query.type;
+        if (!['league', 'tournament'].includes(type)) {
+            return res.status(400).json({success: false, message: 'Provide a valid competition type'});
+        }
+        const competitions = await League.findAll({where: {type, owner: req.user.id}});
+        return res.status(200).json({success: true, message: 'Competitions fetched', data: competitions});
     } catch (error) {
-        console.error(`Error with getting owner competitions by tournament ${error}`);
+        console.error(`Error with getting owner competitions by type ${error}`);
         return res.status(500).json({success: false, message: 'Internal Server Error'});
     }
 };
 
-export const get_all_competitions = async(req, res) => {
+export const get_all_competitions = async (req, res) => {
     try {
-        const all_leagues = await League.findAll();
-        if(!all_leagues || all_leagues.length === 0){
-            return res.status(404).json({success: false, message: 'No Leagues Found'});
-        };
-        return res.status(200).json({success: true, message: 'Leagues Fetched', data: all_leagues});
+        const competitions = await League.findAll();
+        return res.status(200).json({success: true, message: 'Competitions fetched', data: competitions});
     } catch (error) {
-        console.error(`Error with getting all the leagues ${error}`);
+        console.error(`Error with getting all competitions ${error}`);
         return res.status(500).json({success: false, message: 'Internal Server Error'});
     }
 };
 
-export const get_all_comepetitions_by_type = async(req, res) => {
+export const get_competition_by_share_code = async (req, res) => {
     try {
-        const{type} = req.query.q;
-        if(!type){
-            return res.status(400).json({success: false, message: 'Provide The type query'});
-        };
-        const competitions = await League.findAll({type: type});
-        if(!competitions || competitions.length === 0){
-            return res.status(404).json({success: false, message: 'Missing competitions'});
-        };
-        return res.status(200).json({success: true, message: 'Competitions Fetched', data: competitions});
+        const competition = await League.findOne({
+            where: {share_code: req.params.shareId, status: 'active'},
+            attributes: ['id', 'name', 'type', 'participants', 'start_date', 'end_date', 'status', 'share_code'],
+        });
+        if (!competition) {
+            return res.status(404).json({success: false, message: 'Competition invite is invalid or inactive'});
+        }
+        return res.status(200).json({success: true, message: 'Competition invite fetched', data: competition});
+    } catch (error) {
+        console.error(`Error with getting competition invite ${error}`);
+        return res.status(500).json({success: false, message: 'Internal Server Error'});
+    }
+};
+
+export const get_all_comepetitions_by_type = async (req, res) => {
+    try {
+        const type = getQueryValue(req.query.q) ?? req.query.type;
+        if (!['league', 'tournament'].includes(type)) {
+            return res.status(400).json({success: false, message: 'Provide a valid competition type'});
+        }
+        const competitions = await League.findAll({where: {type}});
+        return res.status(200).json({success: true, message: 'Competitions fetched', data: competitions});
     } catch (error) {
         console.error(`Error with getting competitions by type ${error}`);
         return res.status(500).json({success: false, message: 'Internal Server Error'});
     }
 };
 
-export const get_competition_by_status = async(req, res) => {
+export const get_competition_by_status = async (req, res) => {
     try {
-        const {status} = req.query.q;
-        if(!status){
-            return res.status(400).json({success: false, message: 'Provide status'});
-        };
-        const user_id = req.user.id;
-        if(!user_id){
-            return res.status(400).json({success: false, message: 'Please login and try again'});
-        };
-        const leagues = await League.findAll({where:{owner: user_id, status: status}});
-        if(!leagues || leagues.length===0){
-            return res.status(404).json({success: false, message: 'No Leagues found'});
-        };
-        return res.status(200).json({success: true, message: 'Leagues Fetched', data: leagues});
+        const status = getQueryValue(req.query.q) ?? req.query.status;
+        if (!['active', 'inactive'].includes(status)) {
+            return res.status(400).json({success: false, message: 'Provide a valid competition status'});
+        }
+        const competitions = await League.findAll({where: {owner: req.user.id, status}});
+        return res.status(200).json({success: true, message: 'Competitions fetched', data: competitions});
     } catch (error) {
-        console.error(`Error with getting all the active leagues ${error}`);
+        console.error(`Error with getting competitions by status ${error}`);
         return res.status(500).json({success: false, message: 'Internal Server Error'});
     }
 };
 
-
-export const update_competition = async(req, res) => {
+export const update_competition = async (req, res) => {
     try {
-        const {name, participant, interval_number, interval_unit, start_date, end_date} = req.body;
-        const {id} = req.params;
-        if(!id){
-            return res.status(400).json({success: false, message: 'Please Provide the record id'});
-        };
-        const league = await League.findByPk(id);
-        if(!league){
-            return res.status(404).json({success: false, message: 'Invalid ID'});
-        };
-        const match_interval = timeToMilliSeconds(interval_number, interval_unit);
-        const updated_league = await league.update({name, participant, match_interval, start_date, end_date});
-        if(!updated_league){
-            return res.status(500).json({success: false, message: 'Failed to update league record'});
-        };
-        return res.status(200).json({success: true, message: 'Record updated'});
+        const league = await League.findOne({where: {id: req.params.id, owner: req.user.id}});
+        if (!league) {
+            return res.status(404).json({success: false, message: 'Competition not found'});
+        }
+        const updates = {};
+        if (req.body.name !== undefined) updates.name = req.body.name.trim();
+        const participantCount = getParticipantCount(req.body);
+        if (req.body.participant !== undefined || req.body.participants !== undefined) {
+            const currentCount = await League_Participant.count({where: {league_id: league.id}});
+            if (!Number.isInteger(participantCount) || participantCount < currentCount) {
+                return res.status(400).json({success: false, message: 'Participant limit cannot be lower than the current participant count'});
+            }
+            updates.participants = participantCount;
+        }
+        if (req.body.start_date !== undefined) updates.start_date = req.body.start_date;
+        if (req.body.end_date !== undefined) updates.end_date = req.body.end_date;
+        if (req.body.interval_number !== undefined || req.body.interval_unit !== undefined) {
+            if (req.body.interval_number === undefined || req.body.interval_unit === undefined) {
+                return res.status(400).json({success: false, message: 'Provide both interval_number and interval_unit'});
+            }
+            updates.match_interval = timeToMilliSeconds(req.body.interval_number, req.body.interval_unit);
+        }
+        if (!Object.keys(updates).length) {
+            return res.status(400).json({success: false, message: 'Provide at least one field to update'});
+        }
+        await league.update(updates);
+        return res.status(200).json({success: true, message: 'Competition updated', data: league});
     } catch (error) {
-        console.error(`Error with updating the league record ${error}`);
+        console.error(`Error with updating the competition record ${error}`);
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            return res.status(409).json({success: false, message: 'A competition with that name already exists'});
+        }
+        if (error.message?.includes('interval')) {
+            return res.status(400).json({success: false, message: error.message});
+        }
         return res.status(500).json({success: false, message: 'Internal Server Error'});
     }
 };
 
-export const delete_competition = async(req, res) => {
+export const delete_competition = async (req, res) => {
     try {
-        const {id} = req.params;
-        if(!id){
-            return res.status(400).json({success: false, message: 'record id not provided'});
-        };
-        const league = await League.findByPk(id);
-        if(!league){
-            return res.status(404).json({success: false, message: 'Invalid ID'});
-        };
-        await league.destroy();
-        return res.status(200).json({success: true, message: 'League deleted'});
+        const league = await League.findOne({where: {id: req.params.id, owner: req.user.id}});
+        if (!league) {
+            return res.status(404).json({success: false, message: 'Competition not found'});
+        }
+        await sequelize.transaction(async (transaction) => {
+            await League_Point.destroy({where: {competition_id: league.id}, transaction});
+            await League_Matches.destroy({where: {league_id: league.id}, transaction});
+            await League_Participant.destroy({where: {league_id: league.id}, transaction});
+            await league.destroy({transaction});
+        });
+        return res.status(200).json({success: true, message: 'Competition deleted'});
     } catch (error) {
-        console.error(`Error with deleting a league ${error}`);
+        console.error(`Error with deleting a competition ${error}`);
         return res.status(500).json({success: false, message: 'Internal Server Error'});
     }
 };
