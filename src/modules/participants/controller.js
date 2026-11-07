@@ -1,15 +1,19 @@
 import League_Participant from "./schema.js";
-import League from "../leagues/schema.js";
-import League_Point from "../league_points/schema.js";
+import League from "../competitions/schema.js";
+import League_Point from "../points_table/schema.js";
 
 export const add_participant = async(req, res) => {
     try {
-        const {league_id, player_name, team_name} = req.body;
-        if(!league_id || !player_name || !team_name){
+        const {player_name, team_name} = req.body;
+        if(player_name || !team_name){
             return res.status(400).json({success: false, message: 'Missing Fields required'});
         };
         const user_id = req.user.id;
-        const league = await League.findByPk(league_id);
+        const {shareId} = req.params;
+        if(!shareId){
+            return res.status(400).json({success: false, message: 'Provide Share code'})
+        }
+        const league = await League.findOne({where: {share_code: shareId, status: 'active'}});
         if(!league){
             return res.status(404).json({success: false, message: 'Invalid League id'});
         };

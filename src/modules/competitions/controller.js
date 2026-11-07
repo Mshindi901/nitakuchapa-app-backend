@@ -1,13 +1,14 @@
 import League from "./schema.js";
-import League_Participant from "../league-participants/schema.js";
+import League_Participant from "../participants/schema.js";
 import {timeToMilliSeconds} from  '../../utils/time-converter.js';
+import {randomBytes} from 'crypto';
 
 export const add_league = async(req, res) => {
     try {
         //interval number is the number part of the converter function
         //Heavenly God hope this shit works
-        const {name, participant, interval_number, interval_unit, start_date, end_date} = req.body;
-        if(!name || !participant || !interval_number || !interval_unit || !start_date){
+        const {name, type, participant, interval_number, interval_unit, start_date, end_date, no_of_days} = req.body;
+        if(!name || !type || !participant || !interval_number || !interval_unit || !start_date){
             return res.status(400).json({success: false, message: 'Missing Fields'});
         };
         const {team_name, player_name} = req.body;
@@ -18,8 +19,9 @@ export const add_league = async(req, res) => {
         if(!user_id){
             return res.status(400).json({success: false, message: 'Please Login and be authentiated'});
         };
+        const share_code = randomBytes(16).toString('hex');
         const match_interval = timeToMilliSeconds(interval_number, interval_unit);
-        const league = await League.create({name, owner: user_id, participant, match_interval, start_date, end_date});
+        const league = await League.create({name, owner: user_id, share_code, type, participant, match_interval, start_date, end_date, no_of_days});
         if(!league){
             return res.status(500).json({success: false, message: 'Failed to create League'});
         };
@@ -34,7 +36,7 @@ export const add_league = async(req, res) => {
     }
 };
 
-export const get_owner_leagues = async(req, res) => {
+export const get_owner_competitions = async(req, res) => {
     try {
         const user_id = req.user.id;
         if(!user_id){
@@ -51,7 +53,28 @@ export const get_owner_leagues = async(req, res) => {
     }
 };
 
-export const get_all_leagues = async(req, res) => {
+export const get_owner_competitions_by_type = async(req, res) => {
+    try {
+        const user_id = req.user.id;
+        if(!user_id){
+            return res.status(400).json({success: false, message: 'PLease login and Try again'});
+        };
+        const{type} = req.query.q;
+        if(!type){
+            return res.status(400).json({success: false, message: 'Provide The type query'});
+        };
+        const competitions = await League.findAll({type: type, owner: user_id});
+        if(!competitions || competitions.length === 0){
+            return res.status(404).json({success: false, message: 'Missing competitions'});
+        };
+        return res.status(200).json({success: false, message: 'Competitions Fetched', data: competitions});
+    } catch (error) {
+        console.error(`Error with getting owner competitions by tournament ${error}`);
+        return res.status(500).json({success: false, message: 'Internal Server Error'});
+    }
+};
+
+export const get_all_competitions = async(req, res) => {
     try {
         const all_leagues = await League.findAll();
         if(!all_leagues || all_leagues.length === 0){
@@ -64,7 +87,24 @@ export const get_all_leagues = async(req, res) => {
     }
 };
 
-export const get_leagues_by_status = async(req, res) => {
+export const get_all_comepetitions_by_type = async(req, res) => {
+    try {
+        const{type} = req.query.q;
+        if(!type){
+            return res.status(400).json({success: false, message: 'Provide The type query'});
+        };
+        const competitions = await League.findAll({type: type});
+        if(!competitions || competitions.length === 0){
+            return res.status(404).json({success: false, message: 'Missing competitions'});
+        };
+        return res.status(200).json({success: true, message: 'Competitions Fetched', data: competitions});
+    } catch (error) {
+        console.error(`Error with getting competitions by type ${error}`);
+        return res.status(500).json({success: false, message: 'Internal Server Error'});
+    }
+};
+
+export const get_competition_by_status = async(req, res) => {
     try {
         const {status} = req.query.q;
         if(!status){
@@ -86,7 +126,7 @@ export const get_leagues_by_status = async(req, res) => {
 };
 
 
-export const update_league = async(req, res) => {
+export const update_competition = async(req, res) => {
     try {
         const {name, participant, interval_number, interval_unit, start_date, end_date} = req.body;
         const {id} = req.params;
@@ -109,7 +149,7 @@ export const update_league = async(req, res) => {
     }
 };
 
-export const delete_leagues = async(req, res) => {
+export const delete_competition = async(req, res) => {
     try {
         const {id} = req.params;
         if(!id){

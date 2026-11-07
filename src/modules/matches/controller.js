@@ -1,7 +1,8 @@
-import League from "../leagues/schema.js";
-import League_Participant from "../league-participants/schema.js";
+import League from "../competitions/schema.js";
+import League_Participant from "../participants/schema.js";
 import League_Matches from "./schema.js";
 import Match_generation from "../../utils/match-engine.js";
+import { Op } from "sequelize";
 
 export const add_matches = async (req, res) => {
     try {
@@ -99,16 +100,11 @@ export const participant_matches = async(req, res) => {
         if(!id){
             return res.status(400).json({success: false, message: 'Provide Participant ID'});
         };
-        let is_participant_a;
-        let is_participant_b;
-        is_participant_a = await League_Matches.findAll({where:{participant_a: id}});
-        if(!is_participant_a){
-            is_participant_b = await League_Matches.findAll({where:{participant_b: id}});
-            return res.status(200).json({success: true, message: 'Participant Matches', data: is_participant_b});
-        }
-        if(is_participant_a){
-            return res.status(200).json({success: true, message: 'Participant Matches', data: is_participant_a})
+        const matches = await League_Matches.findAll({where: {[Op.or]: [{participant_a: id},{participant_b: id}]}});
+        if(!matches || matches.length === 0){
+            return res.status(404).json({success: false, message: 'No Matches Found'});
         };
+        return res.status(200).json({success: true, message: 'Participant Matches Found', data: matches})
     } catch (error) {
         console.error(`Error with getting participant matches ${error}`);
         return res.status(500).json({success: false, message: 'Internal Server Error'});

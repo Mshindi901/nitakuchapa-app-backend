@@ -8,7 +8,7 @@ const League_Point = sequelize.define('league_points', {
         primaryKey: true,
         allowNull:  false
     },
-    league_id: {
+    competition_id: {
         type: DataTypes.UUID,
         references: {
             model: 'leagues',

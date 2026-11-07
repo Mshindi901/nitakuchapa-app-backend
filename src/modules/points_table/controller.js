@@ -1,5 +1,5 @@
-import League_Point from "./schema";
-import League from '../leagues/schema.js';
+import League_Point from "./schema.js";
+import Competition from '../competitions/schema.js';
 
 export const add_match_results = async(req, res) => {
     try {

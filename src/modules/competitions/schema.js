@@ -1,7 +1,7 @@
-import sequelize from "../../database/config.js";
-import { DataTypes } from "sequelize";
+import sequelize from '../../database/config.js';
+import { DataTypes } from 'sequelize';
 
-const Tournament = sequelize.define('tournaments', {
+const League = sequelize.define('leagues', {
     id: {
         type: DataTypes.UUID,
         defaultValue: DataTypes.UUIDV4,
@@ -10,32 +10,44 @@ const Tournament = sequelize.define('tournaments', {
     },
     name: {
         type: DataTypes.STRING,
-        unique:true,
-        allowNull: false
+        allowNull: false,
+        unique: true
     },
     owner: {
         type: DataTypes.UUID,
         references: {
             model: 'users',
-            key: 'id',
+            key: 'id'
         },
+        allowNull: false
+    },
+    share_code: {
+        type: DataTypes.STRING,
+        allowNull: false
+    },
+    type: {
+        type: DataTypes.ENUM('league', 'tournament'),
         allowNull: false
     },
     participants: {
         type: DataTypes.INTEGER,
         allowNull: false
     },
-    match_intervals: {
+    match_interval: {
         type: DataTypes.BIGINT,
         allowNull: false
     },
+    start_date: {
+        type: DataTypes.STRING,
+        allowNull: false,
+    },
     end_date: {
-        type: DataTypes.DATE,
+        type: DataTypes.STRING,
         allowNull: false
     },
     no_of_days: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: true
     },
     status: {
         type: DataTypes.ENUM('active', 'inactive'),
@@ -44,4 +56,4 @@ const Tournament = sequelize.define('tournaments', {
     }
 }, {timestamps: true});
 
-export default Tournament;
+export default League;
