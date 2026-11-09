@@ -77,13 +77,16 @@ export const get_owner_competitions = async (req, res) => {
 
 export const get_competition_by_code = async(req, res) => {
     try {
-        const {code} = req.body;
-        if(!code){
-            return res.status(400).json({success: false, message: 'Provide Code'});
-        };
-        const competition = await League.findOne({where:{competition_code: code}});
+        const code = typeof req.body.code === 'string' ? req.body.code.trim() : '';
+        if (!/^\d{6}$/.test(code)) {
+            return res.status(400).json({success: false, message: 'Provide a valid six-digit competition code'});
+        }
+        const competition = await League.findOne({
+            where: {competition_code: code, status: 'active'},
+            attributes: ['id', 'name', 'type', 'participants', 'start_date', 'end_date', 'status', 'share_code'],
+        });
         if(!competition){
-            return res.status(404).json({success: false, message: 'No Competition Found'});
+            return res.status(404).json({success: false, message: 'No active competition found for that code'});
         };
         return res.status(200).json({success: true, message: 'Fetched Competition', data: competition});
     } catch (error) {
