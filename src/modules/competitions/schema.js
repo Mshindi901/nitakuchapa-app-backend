@@ -21,6 +21,11 @@ const League = sequelize.define('leagues', {
         },
         allowNull: false
     },
+    competition_code: {
+        type: DataTypes.STRING,
+        unique: true,
+        allowNull: true
+    },
     share_code: {
         type: DataTypes.STRING,
         allowNull: false

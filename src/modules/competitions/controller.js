@@ -1,4 +1,4 @@
-import {randomBytes} from 'node:crypto';
+import {randomBytes, randomInt} from 'node:crypto';
 import sequelize from '../../database/config.js';
 import League from "./schema.js";
 import League_Participant from "../participants/schema.js";
@@ -25,11 +25,13 @@ export const add_league = async (req, res) => {
             !interval_number || !interval_unit || !start_date || !playerName || !teamName) {
             return res.status(400).json({success: false, message: 'Provide a name, type, at least two participants, a match interval, start date, player name, and team name'});
         }
+        const competition_code = randomInt(100000, 1000000).toString();
         const matchInterval = timeToMilliSeconds(interval_number, interval_unit);
         const result = await sequelize.transaction(async (transaction) => {
             const league = await League.create({
                 name: name.trim(),
                 owner: req.user.id,
+                competition_code: competition_code,
                 share_code: randomBytes(16).toString('hex'),
                 type,
                 participants: participantCount,
@@ -72,6 +74,24 @@ export const get_owner_competitions = async (req, res) => {
         return res.status(500).json({success: false, message: 'Internal Server Error'});
     }
 };
+
+export const get_competition_by_code = async(req, res) => {
+    try {
+        const {code} = req.body;
+        if(!code){
+            return res.status(400).json({success: false, message: 'Provide Code'});
+        };
+        const competition = await League.findOne({where:{competition_code: code}});
+        if(!competition){
+            return res.status(404).json({success: false, message: 'No Competition Found'});
+        };
+        return res.status(200).json({success: true, message: 'Fetched Competition', data: competition});
+    } catch (error) {
+        console.error(`Error with getting a competition by the code ${error}`);
+        return res.status(500).json({success: false, message: 'Internal Server Error'});
+    }
+};
+
 
 export const get_owner_competitions_by_type = async (req, res) => {
     try {
